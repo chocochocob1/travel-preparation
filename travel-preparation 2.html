@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>わたしの旅行準備</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:10px;background:linear-gradient(135deg,#fff0f4,#fff8e8,#edf7ff);font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;color:#38343b}
+main{max-width:760px;margin:auto}
+h1{text-align:center;color:#e8799b;font-size:26px}
+h2{font-size:18px;margin:0 0 12px}
+.panel{background:white;padding:11px;border-radius:14px;margin:9px 0;box-shadow:0 2px 8px #7772}
+input,textarea,select,button{font:inherit;padding:7px;border-radius:8px}
+input,textarea,select{border:1px solid #ccc;width:100%;background:white;color:#38343b}
+textarea{min-height:58px}
+button{border:0;background:#f28eaa;color:white;margin:3px;font-weight:bold}
+.blue{background:#a9d9f5;color:#345}.orange{background:#ffbd79;color:#654}.gray{background:#ddd;color:#555}
+.small{font-size:12px;padding:5px 7px}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.row>*{flex:1}
+.progress{height:13px;background:#eee;border-radius:20px;overflow:hidden;margin:12px 0}
+#bar{height:100%;width:0;background:linear-gradient(90deg,#ff91ad,#ffc46f)}
+.item{background:#fffdfd;border:1px solid #e4d9df;border-radius:7px;padding:3px 7px;margin:1px 0;min-width:0}
+.item.done{background:#f2faf5}.itemhead{display:flex;align-items:center;gap:7px;min-height:22px}
+.itemhead input{width:17px;height:17px;flex:none;accent-color:#65bd91;margin:0;padding:0}
+.itemname{font-weight:600;flex:1;font-size:14px;line-height:1.2;min-width:0;color:#38343b}.category{font-size:11px;color:#55464f;margin-top:1px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+.fields label{font-size:12px;color:#38343b}.fields input,.fields textarea{margin-top:4px}
+.memo{grid-column:1/-1}.custom{display:grid;grid-template-columns:1fr 1fr auto;gap:5px;margin-top:7px}
+.hidden{display:none}.actions{margin-top:6px}.itemdetails{margin-top:6px}.itemdetails summary{font-size:12px;color:#48414a;cursor:pointer;padding:2px 0}.items-grid{display:grid;grid-template-columns:1fr;gap:2px}.item.done{opacity:.82}
+@media(max-width:500px){.fields{grid-template-columns:1fr 1fr}.memo{grid-column:1/-1}.custom{grid-template-columns:1fr 1fr}.items-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<h1>✈ わたしの旅行準備</h1>
+<p style="text-align:center;color:#555">旅行の準備を、ひとつずつ。</p>
+
+<section class="panel">
+<h2>旅行を選ぶ</h2>
+<div class="row"><select id="tripSelect"></select><button onclick="newTrip()">＋ 新しい旅行</button></div>
+<div class="row"><button class="blue small" onclick="renameTrip()">旅行名を変更</button><button class="gray small" onclick="deleteTrip()">旅行を削除</button></div>
+</section>
+
+<section class="panel">
+<h2>準備の進み具合</h2><div class="progress"><div id="bar"></div></div><div id="progressText" style="text-align:right;font-size:14px"></div>
+</section>
+
+<section class="panel">
+<h2>持ち物リスト</h2>
+<div class="row"><button class="blue" onclick="showDone=false;render()">未準備だけ表示</button><button class="blue" onclick="showDone=true;render()">準備済みも表示</button></div>
+<div id="items"></div>
+</section>
+
+<section class="panel">
+<h2>持ち物を追加</h2>
+<input id="newName" placeholder="持ち物の名前">
+<input id="newCategory" placeholder="分類（例：貴重品）" style="margin-top:8px">
+<button onclick="addItem()">＋ 追加する</button>
+</section>
+
+<section class="panel">
+<h2>旅行全体のメモ</h2>
+<textarea id="tripMemo" placeholder="旅行について自由にメモできます" oninput="trip().memo=this.value;save()"></textarea>
+</section>
+
+<section class="panel">
+<h2>バックアップ</h2>
+<p style="font-size:13px">端末変更やブラウザのデータ消去に備えて、旅行データを保存してください。</p>
+<button class="orange" onclick="backup()">バックアップを保存</button>
+<button class="blue" onclick="document.getElementById('restoreFile').click()">バックアップを復元</button>
+<input id="restoreFile" type="file" accept=".json,application/json" class="hidden" onchange="restore(event)">
+</section>
+</main>
+<script>
+const KEY="my-travel-preparation-v1";
+const defaults=[["パスポート","貴重品"],["航空券・搭乗券","貴重品"],["財布","貴重品"],["現金・日本円","お金"],["両替","お金"],["クレジットカード","お金"],["海外旅行保険","手続き"],["スマートフォン","電気"],["充電器","電気"],["モバイルバッテリー","電気"],["変換プラグ","電気"],["常備薬","日用品"],["化粧品","日用品"],["スキンケア用品","日用品"],["歯ブラシ","日用品"],["着替え","衣類"],["下着","衣類"],["靴下","衣類"],["パジャマ","衣類"],["上着","衣類"],["ハンカチ・ティッシュ","日用品"],["眼鏡・コンタクト","日用品"],["折りたたみ傘","日用品"]];
+function makeTrip(name){return {name,items:defaults.map(([name,category])=>({name,category,done:false,date:"",amount:"",memo:"",custom:[]})),memo:""}}
+function load(){try{let d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.trips)&&d.trips.length){d.trips.forEach(t=>{if(!Array.isArray(t.items))t.items=[];const existing=new Set(t.items.map(x=>x&&x.name).filter(Boolean));const missing=defaults.filter(([name])=>!existing.has(name)).map(([name,category])=>({name,category,done:false,date:"",amount:"",memo:"",custom:[]}));t.items=[...missing,...t.items];if(typeof t.memo!=="string")t.memo="";});if(!Number.isInteger(d.current)||d.current<0||d.current>=d.trips.length)d.current=0;return d}}catch(e){}return {trips:[makeTrip("新しい旅行")],current:0}}
+let data=load(),showDone=false;
+function trip(){return data.trips[data.current]}
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function render(){
+ const sel=document.getElementById("tripSelect");
+ sel.innerHTML=data.trips.map((t,i)=>`<option value="${i}">${esc(t.name)}</option>`).join("");
+ sel.value=data.current;sel.onchange=()=>{data.current=Number(sel.value);save();render()};
+ document.getElementById("tripMemo").value=trip().memo||"";
+ const a=trip().items,done=a.filter(x=>x.done).length;
+ document.getElementById("bar").style.width=(a.length?done/a.length*100:0)+"%";
+ document.getElementById("progressText").textContent=`${done} / ${a.length} 準備済み`;
+ document.getElementById("items").innerHTML='<div class="items-grid">'+(a.map((x,i)=>({x,i})).filter(o=>showDone||!o.x.done).map(({x,i})=>`
+ <div class="item ${x.done?"done":""}">
+ <div class="itemhead"><input type="checkbox" ${x.done?"checked":""} onchange="toggle(${i},this.checked)"><div class="itemname">${esc(x.name)}<div class="category">${esc(x.category)}</div></div></div>
+ <details class="itemdetails"><summary>詳細・メモ</summary>
+ <div class="fields">
+ <label>期限・日付<input type="date" value="${esc(x.date||"")}" onchange="field(${i},'date',this.value)"></label>
+ <label>金額<input value="${esc(x.amount||"")}" placeholder="例：50000円" onchange="field(${i},'amount',this.value)"></label>
+ <label class="memo">メモ<textarea placeholder="この項目についてのメモ" onchange="field(${i},'memo',this.value)">${esc(x.memo||"")}</textarea></label>
+ </div>
+ ${(x.custom||[]).map((c,j)=>`<div class="custom"><input value="${esc(c.label)}" placeholder="追加項目名" onchange="customField(${i},${j},'label',this.value)"><input value="${esc(c.value)}" placeholder="内容" onchange="customField(${i},${j},'value',this.value)"><button class="gray small" onclick="removeCustom(${i},${j})">削除</button></div>`).join("")}
+ <div class="actions"><button class="blue small" onclick="addCustom(${i})">＋ 項目別の入力欄を追加</button><button class="gray small" onclick="editItem(${i})">名前・分類を編集</button><button class="gray small" onclick="removeItem(${i})">削除</button></div>
+ </details></div>`).join("")||"<p>表示する項目はありません。</p>")+'</div>';
+}
+function addItem(){let n=document.getElementById("newName").value.trim();if(!n){alert("持ち物の名前を入力してください");return}trip().items.push({name:n,category:document.getElementById("newCategory").value.trim(),done:false,date:"",amount:"",memo:"",custom:[]});document.getElementById("newName").value="";document.getElementById("newCategory").value="";save();render()}
+function toggle(i,v){trip().items[i].done=v;save();render()}
+function field(i,k,v){trip().items[i][k]=v;save()}
+function addCustom(i){trip().items[i].custom.push({label:"",value:""});save();render()}
+function customField(i,j,k,v){trip().items[i].custom[j][k]=v;save()}
+function removeCustom(i,j){trip().items[i].custom.splice(j,1);save();render()}
+function editItem(i){let x=trip().items[i],n=prompt("項目名",x.name);if(n===null)return;if(!n.trim())return alert("名前を空にはできません");let c=prompt("分類",x.category);if(c===null)return;x.name=n.trim();x.category=c.trim();save();render()}
+function removeItem(i){if(confirm("この項目を削除しますか？")){trip().items.splice(i,1);save();render()}}
+function newTrip(){let n=prompt("旅行名を入力してください");if(!n||!n.trim())return;data.trips.push(makeTrip(n.trim()));data.current=data.trips.length-1;save();render()}
+function renameTrip(){let n=prompt("旅行名を変更",trip().name);if(n&&n.trim()){trip().name=n.trim();save();render()}}
+function deleteTrip(){if(data.trips.length===1)return alert("最後の旅行は削除できません");if(confirm("この旅行と登録内容を削除しますか？")){data.trips.splice(data.current,1);data.current=0;save();render()}}
+function backup(){let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="travel-backup.json";a.click();URL.revokeObjectURL(url)}
+function restore(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.trips||!Array.isArray(d.trips)||!d.trips.length)throw Error();data=d;data.current=Math.min(data.current||0,data.trips.length-1);save();render();alert("バックアップを復元しました")}catch(err){alert("ファイルを読み込めませんでした")}};r.readAsText(f);e.target.value=""}
+render();
+</script>
+</body>
+</html>
